@@ -5,13 +5,11 @@ services:
       dockerfile: microservice/Dockerfile
     ports:
       - "9000:9000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
   redis:
     image: redis:latest
     ports:
@@ -26,18 +24,18 @@ services:
       - redis
     command: >
       sh -c "
+      python manage.py makemigrations authapi videoanalytics &&
       python manage.py migrate &&
       python manage.py runserver 0.0.0.0:8000 & 
       celery --app=securesight worker -l info"
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
   frontend:
-    build: 
+    build:
       context: .
       dockerfile: frontend/Dockerfile
     ports:
       - "80:80"
+    depends_on:
+      - backend
 
 networks:
   default:

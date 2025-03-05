@@ -27,25 +27,24 @@ SECRET_KEY = 'django-insecure-v0%hfi*yr@s%)ixfnzx1qr&0d!k4joyakpp(c6kkpi@cwwde%2
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "backend",
+    "microservice",
+    "frontend",
+]
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost",
-    "http://127.0.0.1",
-    "http://localhost:9000",
     "http://localhost:8000",
-    "http://localhost:80",
-    "http://0.0.0.0",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "http://localhost",
+    "http://backend:8000",
+    "http://microservice:9000",
 ]
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost",
-    "http://127.0.0.1",
-    "http://localhost:9000",
-    "http://localhost:8000",
-    "http://localhost:80",
-    "http://0.0.0.0",
-]
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -83,9 +82,8 @@ SIMPLE_JWT = {
     'JTI_CLAIM': 'jti',
 }
 
-FASTAPI_URL = 'http://localhost:9000'
+FASTAPI_URL = 'http://microservice:9000'
 
-BROKER_URL = "redis://redis:6379/0"
 CELERY_BROKER_URL = "redis://redis:6379/0"
 CELERY_RESULT_BACKEND = "redis://redis:6379/0"
 CELERY_ACCEPT_CONTENT = ['application/json']
