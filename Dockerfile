@@ -23,10 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir gunicorn==20.1.0
 
 # Подготовка базы данных и статических файлов в одном слое
-RUN python manage.py makemigrations \
-    && python manage.py makemigrations authapi videoanalytics \
-    && python manage.py migrate \
-    && python manage.py collectstatic --no-input
+RUN python manage.py collectstatic --no-input
 
 EXPOSE 8000
 

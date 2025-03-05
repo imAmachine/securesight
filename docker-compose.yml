@@ -3,8 +3,6 @@ services:
     build: 
       context: .
       dockerfile: microservice/Dockerfile
-    volumes:
-      - ./microservice:/app
     ports:
       - "9000:9000"
     deploy:
@@ -14,36 +12,30 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-  celery:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    command: celery --app=securesight worker -l info
-    depends_on:
-      - redis
-      - backend
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
   redis:
     image: redis:latest
     ports:
       - "6379:6379"
   backend:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
-    volumes:
-      - ./:/app/securesight
     ports:
       - "8000:8000"
-    
+    depends_on:
+      - redis
+    command: >
+      sh -c "
+      python manage.py migrate &&
+      python manage.py runserver 0.0.0.0:8000 & 
+      celery --app=securesight worker -l info"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
   frontend:
     build: 
       context: .
       dockerfile: frontend/Dockerfile
-    volumes:
-      - ./frontend:/app/securesight/frontend
     ports:
       - "80:80"
 

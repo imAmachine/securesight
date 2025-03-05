@@ -38,10 +38,30 @@ def generate_thumbnail(file_path):
 
 
 def get_video_resolution(video_path):
-    command = f'ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 {video_path}'
-    output = subprocess.check_output(command, shell=True).decode('utf-8').strip()
-    width, height = map(int, output.split('x'))
-    return width, height
+    command = [
+        "ffprobe", 
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height",
+        "-of", "csv=p=0",
+        video_path
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+
+    output = result.stdout.strip()
+    error = result.stderr.strip()
+
+    if error:
+        raise RuntimeError(f"FFmpeg error: {error}")
+    
+    if not output:
+        raise ValueError(f"FFmpeg did not return resolution for {video_path}")
+
+    try:
+        width, height = map(int, output.split(','))
+        return width, height
+    except ValueError:
+        raise ValueError(f"Unexpected FFmpeg output: {output}")
 
 
 @app.task
