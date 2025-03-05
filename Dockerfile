@@ -5,27 +5,26 @@ LABEL authors="kalinin"
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-WORKDIR /app
+WORKDIR /app/securesight
 
 # Установка системных зависимостей в один слой
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Клонирование репозитория и установка зависимостей
-RUN git clone https://github.com/Gerrux/securesight.git \
-    && cd securesight \
-    && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir gunicorn==20.1.0
 
-WORKDIR /app/securesight
-
-# Копирование остальных файлов проекта
+# Копирование файлов проекта
 COPY . .
+
+# Установка зависимостей
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir gunicorn==20.1.0
 
 # Подготовка базы данных и статических файлов в одном слое
 RUN python manage.py makemigrations \
+    && python manage.py makemigrations authapi videoanalytics \
     && python manage.py migrate \
     && python manage.py collectstatic --no-input
 

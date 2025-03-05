@@ -14,7 +14,21 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    
+  celery:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: celery --app=securesight worker -l info
+    depends_on:
+      - redis
+      - backend
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
   backend:
     build: 
       context: .

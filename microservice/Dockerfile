@@ -53,7 +53,7 @@ RUN git clone https://github.com/NVIDIA-AI-IOT/torch2trt \
     && rm -rf trt_pose
 
 # Клонирование репозитория securesight
-RUN git clone https://github.com/Gerrux/securesight.git \
+RUN git clone https://github.com/imAmachine/securesight.git \
     && mv securesight/microservice/* . \
     && rm -rf securesight
 

@@ -30,12 +30,23 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:9000',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://0.0.0.0',
+    "http://localhost",
+    "http://127.0.0.1",
+    "http://localhost:9000",
+    "http://localhost:8000",
+    "http://localhost:80",
+    "http://0.0.0.0",
 ]
-CSRF_TRUSTED_ORIGINS = ['http://localhost:3000']
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost",
+    "http://127.0.0.1",
+    "http://localhost:9000",
+    "http://localhost:8000",
+    "http://localhost:80",
+    "http://0.0.0.0",
+]
+
 CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
@@ -74,8 +85,9 @@ SIMPLE_JWT = {
 
 FASTAPI_URL = 'http://localhost:9000'
 
-BROKER_URL = 'redis://localhost:6379'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+BROKER_URL = "redis://redis:6379/0"
+CELERY_BROKER_URL = "redis://redis:6379/0"
+CELERY_RESULT_BACKEND = "redis://redis:6379/0"
 CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
