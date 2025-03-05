@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  microservice:
+    build: 
+      context: ./microservice
+      dockerfile: Dockerfile
+    ports:
+      - "9000:9000"
+    networks:
+      - securesight-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    networks:
+      - securesight-network
+    depends_on:
+      - microservice
+
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    networks:
+      - securesight-network
+    depends_on:
+      - backend
+
+networks:
+  securesight-network:
+    driver: bridge
