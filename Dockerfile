@@ -1,44 +1,48 @@
-# Этап 1: Установка зависимостей
+# Этап 1: Сборка зависимостей и установка Python-библиотек
 FROM python:3.10-slim AS builder
-
 LABEL authors="kalinin"
 
+# Устанавливаем переменные окружения для оптимизации работы Python
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
-# Устанавливаем системные зависимости и python-библиотеки в один слой
+# Объединяем обновление и установку необходимых пакетов в один слой для лучшего кэширования.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
     ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
-# Копируем только файлы с зависимостями для лучшего кеширования
+# Копируем файл зависимостей отдельно для использования кэша при изменении исходников
 COPY requirements.txt .
 
-# Устанавливаем UV и Python-зависимости в изолированную директорию
+# Устанавливаем uv и Python-зависимости в системное окружение
 RUN pip install --no-cache-dir uv && \
     uv pip install --no-cache-dir --system -r requirements.txt gunicorn==20.1.0
 
 # Этап 2: Финальный минимальный образ
 FROM python:3.10-slim AS final
-
 LABEL authors="kalinin"
 
+# Runtime-переменные окружения
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app/securesight
 
-# Копируем установленные зависимости из builder
+# Устанавливаем минимальные runtime‑зависимости (ffmpeg) — apt‑пакеты не переносятся из builder
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
+
+# Переносим установленные Python‑библиотеки из builder-стадии
 COPY --from=builder /usr/local /usr/local
 
-# Копируем оставшиеся файлы проекта
+# Копируем исходники проекта (чувствительные к изменениям файлы — копируем после зависимостей для лучшего кеширования)
 COPY . .
 
-# Подготовка статических файлов
+# Подготовка статических файлов (опционально, если используется Django)
 RUN python manage.py collectstatic --no-input
 
 EXPOSE 8000

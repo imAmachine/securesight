@@ -9,7 +9,7 @@ POSE:
     - *weight_root
     - pose_estimation
     - trtpose
-    - densenet121_baseline_att_256x256_B_epoch_160_256x256.trt
+    - densenet121_baseline_att_256x256_B_epoch_160.pth
   ## below settings are needed to filter bad(fewer) person keypoints
   min_total_joints: 5
   min_leg_joints: 1

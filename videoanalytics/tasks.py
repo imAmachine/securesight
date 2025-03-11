@@ -21,11 +21,18 @@ def generate_thumbnail(file_path):
     # Set the output file name
     output_file = 'thumbnail.jpg'
 
-    # Generate thumbnail command
-    command = f'ffmpeg -i {file_path} -ss {time} -s {size} -vframes 1 {output_file}'
+    # Generate thumbnail command (рекомендуется использовать список аргументов для безопасности)
+    cmd = [
+        'ffmpeg',
+        '-i', file_path,
+        '-ss', str(time),
+        '-s', size,
+        '-vframes', '1',
+        output_file
+    ]
 
     # Execute command
-    subprocess.call(command, shell=True)
+    subprocess.call(cmd)
 
     # Open output file as ContentFile
     with open(output_file, 'rb') as f:
@@ -39,18 +46,17 @@ def generate_thumbnail(file_path):
 
 def get_video_resolution(video_path):
     try:
-        # Модифицируем команду для точного получения разрешения
+        # Используем ffprobe для получения разрешения
         cmd = [
-            'ffmpeg',
-            '-i', video_path,
-            '-hide_banner',  # Скрываем лишнюю информацию
-            '-v', 'error',    # Отключаем вывод ошибок в stderr
+            'ffprobe',
+            '-v', 'error',
             '-select_streams', 'v:0',
             '-show_entries', 'stream=width,height',
-            '-of', 'csv=s=x:p=0'  # Формат вывода: 1280x720
+            '-of', 'csv=s=x:p=0',
+            video_path
         ]
         
-        # Запускаем процесс с захватом вывода
+        # Запускаем ffprobe и захватываем вывод
         result = subprocess.run(
             cmd,
             check=True,
@@ -59,7 +65,7 @@ def get_video_resolution(video_path):
             text=True
         )
         
-        # Обрабатываем вывод
+        # Обрабатываем вывод: ожидается формат "1280x720"
         dimensions = result.stdout.strip().split('x')
         if len(dimensions) != 2:
             raise ValueError("Invalid dimensions format")
@@ -67,7 +73,7 @@ def get_video_resolution(video_path):
         return int(dimensions[0]), int(dimensions[1])
         
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"FFmpeg failed: {e.stderr}") from e
+        raise RuntimeError(f"FFprobe failed: {e.stderr}") from e
     except Exception as e:
         raise RuntimeError(f"Error getting resolution: {str(e)}") from e
 
@@ -75,7 +81,6 @@ def get_video_resolution(video_path):
 @app.task
 def convert_video_to_hls(video_id):
     from videoanalytics.models import Video
-    # Путь к выходному файлу
     sleep(1)
     video = Video.objects.get(id=video_id)
     video_path = video.file.path
@@ -93,8 +98,19 @@ def convert_video_to_hls(video_id):
     for version, (width, height) in resolutions.items():
         if video_width >= width and video_height >= height:
             hls_file_name = f"{output_path}_{version}.m3u8"
-            command = f'ffmpeg -i {video_path} -profile:v baseline -level 3.0 -s {width}x{height} -start_number 0 -hls_time 10 -hls_list_size 0 -f hls {hls_file_name}'
-            subprocess.call(command, shell=True)
+            cmd = [
+                'ffmpeg',
+                '-i', video_path,
+                '-profile:v', 'baseline',
+                '-level', '3.0',
+                '-s', f"{width}x{height}",
+                '-start_number', '0',
+                '-hls_time', '10',
+                '-hls_list_size', '0',
+                '-f', 'hls',
+                hls_file_name
+            ]
+            subprocess.call(cmd)
             hls_paths[version] = os.path.relpath(hls_file_name, settings.MEDIA_ROOT)
 
     thumbnail = generate_thumbnail(video_path)
