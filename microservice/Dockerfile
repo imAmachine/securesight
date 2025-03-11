@@ -83,8 +83,8 @@ ARG TORCHVISION_VERSION=0.18.0+cu118
 
 # Объединяем установку зависимостей в один RUN для уменьшения числа слоёв
 RUN pip3 install --no-cache-dir uv && \
-    uv pip install --system --no-cache-dir -r requirements.txt && \
-    uv pip install --system --no-cache-dir torch==${TORCH_VERSION} \
+    uv pip install --system -r requirements.txt && \
+    uv pip install --system torch==${TORCH_VERSION} \
          torchvision==${TORCHVISION_VERSION} \
          --extra-index-url https://download.pytorch.org/whl/cu118 && \
     pip3 install --no-cache-dir /wheels/*.whl && \

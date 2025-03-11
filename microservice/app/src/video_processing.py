@@ -30,12 +30,12 @@ def process_video(file):
     # Initiate video/webcam
     video = Video(input_video_path)
 
-    # Инициализация trtpose, deepsort и action_classifier
-    pose_estimator = get_pose_estimator(**pose_kwargs)  # Здесь создается объект PoseEstimator
+    # Initiate trtpose, deepsort and action action_classifier
+    pose_estimator = get_pose_estimator(**pose_kwargs)
     tracker = get_tracker(**tracker_kwargs)
     action_classifier = get_classifier(**clf_kwargs)
 
-    # Инициализация drawer и текста для визуализации
+    # Initiate drawer and text for visualization
     drawer = Drawer()
     user_text = {
         'text_color': 'green',
@@ -43,7 +43,7 @@ def process_video(file):
         'Mode': 'action',
     }
 
-    # Инициализация видеозаписи
+    # Initialize video writer
     output_width = int(video.width)
     output_height = int(video.height)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -55,21 +55,21 @@ def process_video(file):
     for bgr_frame, timestamp in video:
         rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
 
-        # Прогнозирование позы
+        # Predict pose estimation
         predictions = pose_estimator.predict(rgb_frame, get_bbox=True)
         if len(predictions) == 0:
             tracker.increment_ages()
         else:
-            # Трекинг
+            # Tracking
             predictions = convert_to_openpose_skeletons(predictions)
             predictions, debug_img = tracker.predict(rgb_frame, predictions)
             if len(predictions) > 0:
                 predictions = action_classifier.classify(predictions)
 
-        # Отображение предсказанных результатов на изображении
+        # Draw predicted results on bgr_img with frame info
         render_image = drawer.render_frame(bgr_frame, predictions, **user_text)
 
-        # Запись обработанного кадра в выходное видео
+        # Write the processed frame to the output video file
         out.write(render_image)
 
         if timestamp - timestamp_prev >= 1:
@@ -84,10 +84,10 @@ def process_video(file):
 
     out.release()
 
-    # Удаление временного входного файла
+    # Remove the temporary input file
     os.remove(input_video_path)
 
-    # Преобразование логов в JSON
+    # Convert log entries to JSON
     log_json = json.dumps(log_entries, default=str)
 
     return output_video_path, log_json
