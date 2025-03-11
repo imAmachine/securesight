@@ -1,7 +1,7 @@
 # Этап 1: Base dependencies
 FROM nvcr.io/nvidia/tensorrt:23.12-py3 AS base
 
-# Устанавливаем переменные окружения для CUDA и других параметров
+# Установка переменных окружения для CUDA и других параметров
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
     UV_HTTP_TIMEOUT=600 \
@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Этап 2: Python dependencies
 FROM base AS python-deps
 
-# Копируем и устанавливаем зависимости с разделением на базовые и основные
+# Копирование и установка зависимостей с разделением на базовые и основные
 COPY microservice/requirements.txt .
 RUN uv pip install --system \
     packaging setuptools wheel ninja \
@@ -72,11 +72,14 @@ FROM nvcr.io/nvidia/tensorrt:23.12-py3 AS final
 
 WORKDIR /app
 
-# Копируем только необходимые артефакты из предыдущего этапа
+# Копирование артефактов из предыдущего этапа
 COPY --from=ml-build /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
 COPY --from=ml-build /app/torch2trt /app/torch2trt
 COPY --from=ml-build /app/trt_pose /app/trt_pose
 COPY microservice/ .
+
+# Устанавка Uvicorn в финальном образе
+RUN uv pip install --system --no-cache-dir uvicorn
 
 EXPOSE 9000
 
