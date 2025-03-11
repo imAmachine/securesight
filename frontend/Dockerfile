@@ -3,27 +3,36 @@ FROM node:16-alpine AS build
 
 WORKDIR /app/frontend
 
-# Copy package files first
+# Copy only package files first for better caching
 COPY frontend/package.json frontend/package-lock.json ./
 
-# Install dependencies
-RUN npm ci --silent
+# Use cache mount to speed up dependency installation
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --silent
 
-# Copy the rest of the frontend files
-COPY frontend/ .
+# Copy only necessary source files (excluding unnecessary files like tests, docs, etc.)
+COPY frontend/public public
+COPY frontend/src src
 
 # Build the application
 RUN npm run build
 
 # Stage 2: Serve the built app using NGINX
-FROM nginx:alpine
+FROM nginx:alpine AS final
 
-# Copy built app from build stage
-COPY --from=build /app/frontend/build /usr/share/nginx/html
+# Set working directory
+WORKDIR /usr/share/nginx/html
 
-# Copy NGINX configuration (ensure this file exists)
+# Copy built app from the build stage
+COPY --from=build /app/frontend/build ./
+
+# Copy NGINX configuration (optional, if custom config is needed)
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
+# Set ownership and permissions
+RUN chown -R nginx:nginx /usr/share/nginx/html && chmod -R 755 /usr/share/nginx/html
+
+# Expose port
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
