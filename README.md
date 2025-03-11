@@ -1,5 +1,5 @@
-Для поднятия проекта:
+Для поднятия проекта на Windows:
 ```bash
 git clone https://github.com/imAmachine/securesight.git
-docker-compose up --build
+$env:DOCKER_BUILDKIT=1; docker-compose build
 ```
