@@ -30,7 +30,7 @@ TRACKER:
     - *weight_root
     - tracker
     - deepsort
-    - siamese_mars.trt # wide_residual_market1501, siamese_market1501
+    - siamese_mars.pth # wide_residual_market1501, siamese_market1501
 
 # for action action_classifier
 CLASSIFIER:

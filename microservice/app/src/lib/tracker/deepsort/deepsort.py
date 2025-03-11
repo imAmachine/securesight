@@ -37,7 +37,35 @@ class DeepSort(object):
         """
 
         # generate detections
-        bbox_tlwh = np.array([pred.bbox for pred in predictions])
+        bbox_list = []
+        for i, pred in enumerate(predictions):
+            # Проверка наличия атрибута bbox
+            if not hasattr(pred, "bbox"):
+                print(f"[WARNING] Объект predictions[{i}] не содержит атрибута 'bbox'. Пропускаем.")
+                continue
+
+            # Преобразуем pred.bbox в numpy-массив и выпрямляем его
+            try:
+                bbox_array = np.array(pred.bbox, dtype=float).flatten()
+            except Exception as e:
+                print(f"[WARNING] Не удалось преобразовать bbox для predictions[{i}]: {pred.bbox}. Ошибка: {e}")
+                continue
+
+            # Если в bbox_array больше 4 элементов, берем только первые 4
+            if bbox_array.size > 4:
+                bbox_array = bbox_array[:4]
+            elif bbox_array.size < 4:
+                print(f"[WARNING] bbox в predictions[{i}] имеет недостаточную длину ({bbox_array.size}). Пропускаем.")
+                continue
+
+            bbox_list.append(bbox_array)
+
+        if len(bbox_list) == 0:
+            print("[ERROR] Нет корректных bbox для обработки.")
+            bbox_tlwh = np.empty((0, 4), dtype=float)
+        else:
+            # Гарантируем, что все элементы имеют форму (4,)
+            bbox_tlwh = np.stack(bbox_list)
         bbox_tlbr = self.tlwh_to_tlbr(bbox_tlwh)
         features = self._get_features(bbox_tlbr, rgb_img)
         detections = [Detection(bbox, features[i]) for i, bbox in enumerate(bbox_tlwh)]
