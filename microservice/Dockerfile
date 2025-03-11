@@ -82,13 +82,13 @@ ARG TORCH_VERSION=2.3.0+cu118
 ARG TORCHVISION_VERSION=0.18.0+cu118
 
 # Объединяем установку зависимостей в один RUN для уменьшения числа слоёв
-RUN pip3 install --no-cache-dir uv && \
+RUN pip3 install uv && \
     uv pip install --system -r requirements.txt && \
     uv pip install --system torch==${TORCH_VERSION} \
          torchvision==${TORCHVISION_VERSION} \
          --extra-index-url https://download.pytorch.org/whl/cu118 && \
-    pip3 install --no-cache-dir /wheels/*.whl && \
-    uv pip install --system --no-cache-dir uvicorn
+    pip3 install /wheels/*.whl && \
+    uv pip install --system uvicorn
 
 # Создаем непользовательский аккаунт для повышения безопасности
 RUN useradd -m appuser && chown -R appuser /app
