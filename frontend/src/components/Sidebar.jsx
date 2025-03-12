@@ -4,12 +4,12 @@ import {FormCheck, Nav, Navbar} from 'react-bootstrap';
 import {useNavigate} from 'react-router-dom';
 import { ReactComponent as LogoLightSvg } from '../assets/images/logo_dark.svg';
 import { ReactComponent as LogoDarkSvg } from '../assets/images/logo_light.svg';
-import {BiChevronsLeft, BiChevronsRight, BiError, BiExit, BiHome, BiMovie, BiVideo} from 'react-icons/bi';
+import {BiChevronsLeft, BiChevronsRight, BiError, BiExit, BiHome, BiMovie, BiVideo, BiWebcam} from 'react-icons/bi';
 import {useAuth} from '../auth/AuthProvider';
 import '../styles/sidebar.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-const Sidebar = () => {
+const Sidebar = ({onWebcamToggle}) => {
     const {activeMenu, setActiveMenu, currentMode, setCurrentMode, setMode} = useStateContext();
     const navigate = useNavigate();
     const {logout} = useAuth();
@@ -57,6 +57,12 @@ const Sidebar = () => {
                     <Nav.Link onClick={() => navigate('/incidents')}>
                         <BiError className='nav-icon'/>
                         <span className={`nav-text ${!activeMenu && 'd-none'}`}>Инциденты</span>
+                    </Nav.Link>
+                </Nav.Item>
+                <Nav.Item>
+                    <Nav.Link onClick={onWebcamToggle}>
+                        <BiWebcam className='nav-icon'/>
+                        <span className={`nav-text ${!activeMenu && 'd-none'}`}>Веб-камера</span>
                     </Nav.Link>
                 </Nav.Item>
             </Nav>
