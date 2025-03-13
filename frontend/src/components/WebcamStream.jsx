@@ -7,38 +7,110 @@ const WebcamStream = () => {
   const [analytics, setAnalytics] = useState([]);
   const [streaming, setStreaming] = useState(false);
   const requestRef = useRef();
-  const lastProcessedRef = useRef(0);
+  const lastFrameTime = useRef(0);
   const processing = useRef(false);
-  const frameQueue = useRef([]);
 
-  // Фиксированные размеры для камеры 1280x720
-  const CAMERA_WIDTH = 1280;
-  const CAMERA_HEIGHT = 720;
-  const FPS = 30;
-  const FRAME_INTERVAL = 1000 / FPS;
+  // Конфигурация камеры
+  const CAMERA_CONFIG = {
+    width: 1280,
+    height: 720,
+    fps: 30,
+    frameInterval: 1000 / 30 // 33ms между кадрами
+  };
 
-  // Нормализация координат с учетом фиксированного разрешения
-  const normalizeCoordinates = useCallback((coord, isX = true) => {
+  // Нормализация координат с зеркалированием и масштабированием
+  const normalizeBBox = useCallback((bbox) => {
     const canvas = canvasRef.current;
-    if (!canvas) return 0;
-    
-    const scale = isX ? canvas.width / CAMERA_WIDTH : canvas.height / CAMERA_HEIGHT;
-    return coord * scale;
+    if (!canvas || !bbox) return null;
+
+    const [x1, y1, x2, y2] = bbox;
+    const scaleX = canvas.width / CAMERA_CONFIG.width;
+    const scaleY = canvas.height / CAMERA_CONFIG.height;
+
+    return {
+      x: (CAMERA_CONFIG.width - x2) * scaleX,
+      y: y1 * scaleY,
+      width: (x2 - x1) * scaleX,
+      height: (y2 - y1) * scaleY
+    };
   }, []);
 
-  // Основной цикл отрисовки
-  const animate = useCallback(() => {
-    const now = Date.now();
+  // Отрисовка скелета
+  const drawSkeleton = useCallback((ctx, points) => {
+    if (!points?.length) return;
+    
+    // Фильтруем валидные точки и преобразуем координаты
+    const validPoints = points
+      .map(point => {
+        // Проверяем структуру данных (может быть [id, x, y] или [x, y])
+        const isV1Format = point.length === 3;
+        const x = isV1Format ? point[1] : point[0];
+        const y = isV1Format ? point[2] : point[1];
+        
+        // Конвертируем нормализованные координаты в абсолютные
+        const absX = x * CAMERA_CONFIG.width;
+        const absY = y * CAMERA_CONFIG.height;
+        
+        // Фильтрация невалидных точек
+        return x > 0 && y > 0 && x < 1 && y < 1 
+          ? { x: absX, y: absY } 
+          : null;
+      })
+      .filter(Boolean);
+  
+    // Отрисовка линий между ключевыми точками
+    ctx.strokeStyle = '#FF0000';
+    ctx.lineWidth = 2;
+    
+    // соединение точек
+    const connections = [
+      [16, 14], [14, 12], [17, 15], [15, 13], [12, 13], [6, 8], [7, 9],
+        [8, 10], [9, 11], [2, 3], [1, 2], [1, 3], [2, 4], [3, 5], [4, 6],
+        [5, 7], [18, 1], [18, 6], [18, 7], [18, 12], [18, 13]
+    ];
+  
+    connections.forEach(([start, end]) => {
+      if (validPoints[start] && validPoints[end]) {
+        ctx.beginPath();
+        ctx.moveTo(
+          CAMERA_CONFIG.width - validPoints[start].x,
+          validPoints[start].y
+        );
+        ctx.lineTo(
+          CAMERA_CONFIG.width - validPoints[end].x,
+          validPoints[end].y
+        );
+        ctx.stroke();
+      }
+    });
+  
+    // Отрисовка точек
+    ctx.fillStyle = '#00FF00';
+    validPoints.forEach(point => {
+      ctx.beginPath();
+      ctx.arc(
+        CAMERA_CONFIG.width - point.x, // Зеркалирование по X
+        point.y,
+        5, 
+        0, 
+        Math.PI * 2
+      );
+      ctx.fill();
+    });
+  }, []);
+
+  // Основной цикл рендеринга
+  const renderFrame = useCallback(() => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
     const ctx = canvas?.getContext('2d');
     
-    if (!ctx || !video || !canvas) {
-      requestRef.current = requestAnimationFrame(animate);
-      return;
-    }
+    if (!ctx || !video || !canvas) return;
 
-    // Отрисовка видео с зеркальным отражением
+    // Очистка канваса
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Зеркальное отображение видео
     ctx.save();
     ctx.scale(-1, 1);
     ctx.translate(-canvas.width, 0);
@@ -47,107 +119,56 @@ const WebcamStream = () => {
 
     // Отрисовка аналитики
     analytics.forEach(obj => {
-      if (!obj.bbox || !obj.skeleton) return;
+      const bbox = normalizeBBox(obj.bbox);
+      if (!bbox) return;
 
-      // Bounding Box
+      // Bounding box
       ctx.strokeStyle = '#00FF00';
       ctx.lineWidth = 3;
-      const [x1, y1, x2, y2] = obj.bbox;
-      ctx.strokeRect(
-        normalizeCoordinates(CAMERA_WIDTH - x2, true),
-        normalizeCoordinates(y1, false),
-        normalizeCoordinates(x2 - x1, true),
-        normalizeCoordinates(y2 - y1, false)
-      );
+      ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
 
       // Скелет
-      ctx.fillStyle = '#FF0000';
-      obj.skeleton.forEach(([x, y]) => {
-        ctx.beginPath();
-        ctx.arc(
-          normalizeCoordinates(CAMERA_WIDTH - x, true),
-          normalizeCoordinates(y, false),
-          5, 0, 2 * Math.PI
-        );
-        ctx.fill();
-      });
+      if (obj.skeleton) {
+        drawSkeleton(ctx, obj.skeleton);
+      }
+
+      // Подпись
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      const label = `${obj.action} (ID: ${obj.track_id})`;
+      ctx.fillRect(bbox.x, bbox.y - 20, ctx.measureText(label).width + 10, 20);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(label, bbox.x + 5, bbox.y - 5);
     });
 
-    // Управление FPS
-    if (now - lastProcessedRef.current >= FRAME_INTERVAL) {
-      lastProcessedRef.current = now;
-      processFrame();
-    }
+    requestRef.current = requestAnimationFrame(renderFrame);
+  }, [analytics, normalizeBBox, drawSkeleton]);
 
-    requestRef.current = requestAnimationFrame(animate);
-  }, [analytics, normalizeCoordinates]);
-
-  // Обработка и отправка кадра
+  // Отправка кадра на сервер
   const processFrame = useCallback(async () => {
     if (processing.current || !videoRef.current) return;
     
     processing.current = true;
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = CAMERA_WIDTH;
-      canvas.height = CAMERA_HEIGHT;
+      canvas.width = CAMERA_CONFIG.width;
+      canvas.height = CAMERA_CONFIG.height;
       const ctx = canvas.getContext('2d');
       
-      // Захват кадра без эффектов отображения
-      ctx.drawImage(videoRef.current, 0, 0, CAMERA_WIDTH, CAMERA_HEIGHT);
+      // Захват кадра
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       
-      // Создаем FormData и добавляем обязательные поля
-      const formData = new URLSearchParams();
-      formData.append('frame_data', canvas.toDataURL('image/jpeg', 0.8));
-      formData.append('timestamp', Date.now());
-  
+      // Отправка данных
       const response = await axios.post(
         'http://localhost:9000/process-frame',
-        formData,
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
-        }
+        new URLSearchParams({
+          frame_data: canvas.toDataURL('image/jpeg', 0.8),
+          timestamp: Date.now()
+        }),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
       );
-  
+
       if (response.data?.objects) {
         setAnalytics(response.data.objects);
-        
-        // Отрисовка результатов
-        const mainCtx = canvasRef.current.getContext('2d');
-        mainCtx.clearRect(0, 0, CAMERA_WIDTH, CAMERA_HEIGHT);
-        
-        // Зеркальное отображение исходного видео
-        mainCtx.save();
-        mainCtx.scale(-1, 1);
-        mainCtx.translate(-CAMERA_WIDTH, 0);
-        mainCtx.drawImage(videoRef.current, 0, 0, CAMERA_WIDTH, CAMERA_HEIGHT);
-        mainCtx.restore();
-  
-        // Отрисовка аналитики
-        response.data.objects.forEach(obj => {
-          if (obj.bbox) {
-            const [x1, y1, x2, y2] = obj.bbox;
-            mainCtx.strokeStyle = '#00FF00';
-            mainCtx.lineWidth = 3;
-            mainCtx.strokeRect(
-              CAMERA_WIDTH - x2, 
-              y1, 
-              x2 - x1, 
-              y2 - y1
-            );
-  
-            if (obj.skeleton) {
-              mainCtx.fillStyle = '#FF0000';
-              obj.skeleton.forEach(([x, y]) => {
-                mainCtx.beginPath();
-                mainCtx.arc(CAMERA_WIDTH - x, y, 5, 0, Math.PI * 2);
-                mainCtx.fill();
-              });
-            }
-          }
-        });
       }
     } catch (err) {
       console.error('Frame processing error:', err);
@@ -155,23 +176,36 @@ const WebcamStream = () => {
     processing.current = false;
   }, []);
 
+  // Управление частотой кадров
+  const animationLoop = useCallback((timestamp) => {
+    if (timestamp - lastFrameTime.current >= CAMERA_CONFIG.frameInterval) {
+      lastFrameTime.current = timestamp;
+      processFrame();
+    }
+    requestRef.current = requestAnimationFrame(animationLoop);
+  }, [processFrame]);
+
   // Инициализация камеры
   useEffect(() => {
     const initCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            width: { ideal: CAMERA_WIDTH },
-            height: { ideal: CAMERA_HEIGHT },
-            frameRate: { ideal: FPS }
+            width: { ideal: CAMERA_CONFIG.width },
+            height: { ideal: CAMERA_CONFIG.height },
+            frameRate: { ideal: CAMERA_CONFIG.fps }
           }
         });
 
         videoRef.current.srcObject = stream;
         videoRef.current.onloadedmetadata = () => {
+          canvasRef.current.width = videoRef.current.videoWidth;
+          canvasRef.current.height = videoRef.current.videoHeight;
+          
           videoRef.current.play().then(() => {
             setStreaming(true);
-            requestRef.current = requestAnimationFrame(animate);
+            requestRef.current = requestAnimationFrame(animationLoop);
+            renderFrame();
           });
         };
       } catch (err) {
@@ -187,25 +221,25 @@ const WebcamStream = () => {
         videoRef.current.srcObject.getTracks().forEach(track => track.stop());
       }
     };
-  }, [animate]);
+  }, [animationLoop, renderFrame]);
 
   return (
     <div style={{ position: 'relative', maxWidth: '100%', margin: '0 auto' }}>
       <video ref={videoRef} autoPlay muted playsInline style={{ display: 'none' }} />
       <canvas
         ref={canvasRef}
-        width={CAMERA_WIDTH}
-        height={CAMERA_HEIGHT}
         style={{
           width: '100%',
           height: 'auto',
-          transform: 'scaleX(-1)', // Зеркальное отражение только для отображения
-          backgroundColor: '#000'
+          backgroundColor: '#000',
+          borderRadius: '8px',
+          transform: 'scaleX(-1)' // Зеркалирование только для отображения
         }}
       />
       <div style={statusStyle}>
-        Статус: {streaming ? 'LIVE' : 'Инициализация...'}
+        <div>Статус: {streaming ? 'LIVE' : 'Инициализация...'}</div>
         <div>Обнаружено объектов: {analytics.length}</div>
+        <div>FPS: {CAMERA_CONFIG.fps}</div>
       </div>
     </div>
   );
@@ -219,7 +253,8 @@ const statusStyle = {
   fontFamily: 'monospace',
   backgroundColor: 'rgba(0,0,0,0.7)',
   padding: '8px',
-  borderRadius: '4px'
+  borderRadius: '4px',
+  zIndex: 1
 };
 
 export default WebcamStream;

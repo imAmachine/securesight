@@ -6,11 +6,13 @@ from fastapi.responses import StreamingResponse, JSONResponse
 import cv2
 import numpy as np
 from uvicorn.protocols.utils import ClientDisconnected
-from app.src.video_processing import process_video, process_single_frame
+from app.src.video_processing import process_video
 from app.src.lib.utils.config import Config
+from app.src.lib.utils.drawer import Drawer
 from app.src.lib.pose_estimation import get_pose_estimator
 from app.src.lib.tracker import get_tracker
 from app.src.lib.action_classifier import get_classifier
+from app.src.lib.utils.utils import convert_to_openpose_skeletons
 
 router = APIRouter()
 
@@ -19,6 +21,7 @@ cfg = Config("app/src/configs/infer_trtpose_deepsort_dnn.yaml")
 pose_estimator = get_pose_estimator(**cfg.POSE)
 tracker = get_tracker(**cfg.TRACKER)
 action_classifier = get_classifier(**cfg.CLASSIFIER)
+drawer = Drawer()
 
 @router.post("/process-frame")
 async def process_realtime_frame(
@@ -38,34 +41,36 @@ async def process_realtime_frame(
         if bgr_frame is None or bgr_frame.size == 0:
             raise ValueError("Failed to decode image")
 
-        # Обработка кадра через общий пайплайн
-        predictions = process_single_frame(
-            bgr_frame,
-            pose_estimator,
-            tracker,
-            action_classifier
-        )
-
+        # Обработка кадра через полный пайплайн
+        rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
+        
+        # Шаг 1: Детекция позы
+        predictions = pose_estimator.predict(rgb_frame, get_bbox=True)
+        
+        # Шаг 2: Трекинг объектов
+        if predictions:
+            predictions = convert_to_openpose_skeletons(predictions)
+            predictions, _ = tracker.predict(rgb_frame, predictions)
+            
+            # Шаг 3: Классификация действий
+            predictions = action_classifier.classify(predictions)
+        
         # Форматирование результатов
         results = []
-        for p in predictions:
-            if not hasattr(p, 'bbox'):
-                continue
-                
+        for pred in predictions:
             item = {
                 "bbox": [
-                    float(p.bbox[0]),  # x1
-                    float(p.bbox[1]),  # y1
-                    float(p.bbox[2]),  # x2
-                    float(p.bbox[3])   # y2
+                    float(pred.bbox[0]),  # x1
+                    float(pred.bbox[1]),  # y1
+                    float(pred.bbox[2]),  # x2
+                    float(pred.bbox[3])   # y2
                 ],
-                "action": p.action if hasattr(p, 'action') else 'unknown',
-                "track_id": p.tracking_id if hasattr(p, 'tracking_id') else -1
+                "action": getattr(pred, 'action', 'unknown'),
+                "track_id": getattr(pred, 'tracking_id', -1)
             }
             
-            # Добавляем ключевые точки если есть
-            if hasattr(p, 'keypoints'):
-                item["skeleton"] = p.keypoints.tolist()
+            if hasattr(pred, 'keypoints'):
+                item["skeleton"] = pred.keypoints.tolist()
                 
             results.append(item)
 

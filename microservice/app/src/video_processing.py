@@ -12,26 +12,6 @@ from app.src.lib.utils.drawer import Drawer
 from app.src.lib.utils.utils import convert_to_openpose_skeletons
 from app.src.lib.utils.video import Video
 
-def process_single_frame(frame, pose_estimator, tracker, classifier):
-    """Обработка одного кадра для real-time режима"""
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    
-    # Получение предсказаний
-    predictions = pose_estimator.predict(rgb_frame, get_bbox=True)
-    
-    if not predictions:
-        return []
-
-    # Трекинг и классификация
-    predictions = convert_to_openpose_skeletons(predictions)
-    predictions, _ = tracker.predict(rgb_frame, predictions)
-    predictions = classifier.classify(predictions)
-    
-    # Форматирование результатов
-    return [{
-        'bbox': pred.bbox,
-        'keypoints': pred.keypoints  # Предполагаем наличие ключевых точек
-    } for pred in predictions]
 
 def process_video(file):
     # Создаем временный файл для входного видео
