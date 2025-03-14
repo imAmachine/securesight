@@ -1,6 +1,6 @@
 import base64
 import json
-from microservice.app.src.video_processing import create_log_entry, process_frame
+from app.src.video_processing import create_log_entry, process_frame
 import cv2
 
 

@@ -3,7 +3,7 @@ import json
 import time
 import base64
 import cv2
-from microservice.app.src.webcam_processing import process_frame_and_render, send_websocket_data
+from app.src.webcam_processing import process_frame_and_render, send_websocket_data
 import numpy as np
 from fastapi import APIRouter, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
