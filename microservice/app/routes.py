@@ -3,92 +3,63 @@ import json
 import time
 import base64
 import cv2
+from microservice.app.src.webcam_processing import process_frame_and_render, send_websocket_data
 import numpy as np
 from fastapi import APIRouter, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from uvicorn.protocols.utils import ClientDisconnected
-from app.src.video_processing import process_video, initialize_components, process_frame, create_log_entry
+from app.src.video_processing import process_video, initialize_components
+
 
 router = APIRouter()
 
-# Хранение активных соединений
 active_connections = {}
 
 @router.websocket("/ws/camera/{client_id}")
-async def camera_endpoint(websocket: WebSocket, client_id: str):
+async def camera_websocket_endpoint(websocket: WebSocket, client_id: str):
+    """WebSocket маршрут для обработки видеопотока с камеры."""
     await websocket.accept()
     active_connections[client_id] = websocket
-    
     print(f"Client {client_id} connected")
-    
-    # Инициализация компонентов для обработки видео
+
     components = initialize_components()
-    
+    cap = cv2.VideoCapture(0)
+
+    if not cap.isOpened():
+        await websocket.send_text(json.dumps({"error": "Failed to open camera"}))
+        return
+
+    frame_count = 0
+    start_time = time.time()
+    timestamp_prev = 0
+
     try:
         while True:
-            # Получаем данные от клиента
-            data = await websocket.receive()
-            
-            if "bytes" in data:
-                # Обрабатываем изображение
-                frame_bytes = data["bytes"]
-                
-                # Декодируем изображение
-                nparr = np.frombuffer(frame_bytes, np.uint8)
-                bgr_frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                
-                if bgr_frame is None:
-                    await websocket.send_text(json.dumps({"error": "Failed to decode image"}))
-                    continue
-                
-                # Конвертируем и обрабатываем кадр
-                rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
-                
-                # Используем существующий пайплайн обработки
-                predictions = process_frame(
-                    rgb_frame,
-                    components['pose_estimator'],
-                    components['tracker'],
-                    components['action_classifier']
-                )
-                
-                # Рендерим результат
-                render_image = components['drawer'].render_frame(
-                    bgr_frame, 
-                    predictions, 
-                    **components['visualization_params']
-                )
-                
-                # Создаем лог
-                timestamp = time.time()
-                log_entry = create_log_entry(predictions, timestamp, 0)
-                
-                # Преобразуем изображение в base64 для отправки
-                _, buffer = cv2.imencode('.jpg', render_image)
-                frame_data = buffer.tobytes()
-                frame_base64 = base64.b64encode(frame_data).decode('utf-8')
-                
-                # Отправляем результат
-                await websocket.send_text(json.dumps({
-                    "frame": frame_base64,
-                    "log": json.dumps(log_entry, default=str)
-                }))
-            
+            ret, bgr_frame = cap.read()
+            if not ret:
+                break
+
+            timestamp = time.time() - start_time
+            frame_count += 1
+
+            predictions, render_image = process_frame_and_render(bgr_frame, components)
+
+            if timestamp - timestamp_prev >= 1:
+                await send_websocket_data(websocket, render_image, predictions, timestamp, frame_count)
+                timestamp_prev = timestamp
+
     except WebSocketDisconnect:
         print(f"Client {client_id} disconnected")
     except Exception as e:
-        print(f"Error processing camera stream: {e}")
-        try:
-            await websocket.send_text(json.dumps({"error": str(e)}))
-        except:
-            pass
+        print(f"Error in WebSocket processing: {e}")
+        await websocket.send_text(json.dumps({"error": str(e)}))
     finally:
-        if client_id in active_connections:
-            del active_connections[client_id]
+        cap.release()
+        active_connections.pop(client_id, None)
 
-# Остальные маршруты остаются без изменений
 @router.get("/api/status")
 async def get_status():
+    """Возвращает статус API."""
     return {
         "status": "running",
         "active_connections": len(active_connections)
@@ -96,21 +67,19 @@ async def get_status():
 
 @router.post("/process_video")
 async def process_video_route(file: UploadFile):
+    """Маршрут для обработки загруженного видео."""
     try:
         processed_video_path, log = process_video(file)
 
         def stream_video_file():
             with open(processed_video_path, "rb") as f:
-                while True:
-                    data = f.read(4096)
-                    if not data:
-                        break
-                    yield data
+                while chunk := f.read(4096):
+                    yield chunk
 
         response = StreamingResponse(stream_video_file(), media_type="video/mp4")
-        response.headers["Content-Disposition"] = f"attachment; filename=processed_video.mp4"
+        response.headers["Content-Disposition"] = "attachment; filename=processed_video.mp4"
         response.headers["Log"] = json.dumps(log)
         return response
     except ClientDisconnected:
-        print("Client disconnected before response was fully sent")
+        print("Client disconnected while streaming video")
         raise
