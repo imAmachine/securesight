@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Badge, Spinner, Button } from 'react-bootstrap';
+import { Card, Badge, Spinner, Button, Form } from 'react-bootstrap';
 import { FaVideo, FaVideoSlash } from 'react-icons/fa';
 import '../styles/main.css';
 
@@ -12,12 +12,42 @@ const WebcameraComponent = ({
   stopStreamingVideo,
   canvasRef, 
   videoRef, 
-  captureCanvasRef 
+  captureCanvasRef,
+  selectedModel,
+  setSelectedModel
 }) => {
+  const toggleModel = () => {
+    if (!isStreamingActive) {
+      setSelectedModel(prev => {
+        const newModel = prev === 'skeleton' ? 'emotion' : 'skeleton';
+        console.log('Model changed to:', newModel);
+        return newModel;
+      });
+    }
+  };
+
   return (
     <Card className={`video-stream-card ${currentMode === 'Light' ? 'video-stream-card-light' : 'video-stream-card-dark'}`}>
       <Card.Header className={`d-flex justify-content-between align-items-center ${currentMode === 'Light' ? 'text-dark' : 'text-light'}`}>
         <h3>Видеоаналитика в реальном времени</h3>
+        <div className="model-switcher d-flex align-items-center gap-3">
+          <div 
+            onClick={toggleModel}
+            style={{ cursor: isStreamingActive ? 'not-allowed' : 'pointer' }}
+            className="d-flex align-items-center gap-2"
+          >
+            <span>Трекинг скелета</span>
+            <Form.Check
+              type="switch"
+              checked={selectedModel === 'emotion'}
+              disabled={isStreamingActive}
+              readOnly
+              className={`mx-2 ${currentMode === 'Dark' ? 'custom-switch-dark' : ''}`}
+            />
+            <span>Распознавание эмоций</span>
+          </div>
+          </div>
+
         <Badge bg={isConnected ? "success" : "danger"}>
           {isConnected ? "Подключено" : "Отключено"}
         </Badge>

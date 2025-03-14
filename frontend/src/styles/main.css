@@ -134,3 +134,18 @@
   .connection-error {
     padding: 2rem;
   }
+
+  /* Переключение моделей */
+  .custom-switch-dark .form-check-input {
+    background-color: #6c757d;
+    border-color: #6c757d;
+  }
+  
+  .custom-switch-dark .form-check-input:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+  }
+  
+  .form-check-input:disabled {
+    opacity: 0.75;
+  }

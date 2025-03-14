@@ -20,12 +20,14 @@ class WebcamStreamClient:
         self.running = False
         self.camera = None
         self.websocket = None
+        self.current_model = 'skeleton'
         
-    async def connect(self):
+    async def connect(self, model='skeleton'):
         """Установка WebSocket соединения с сервером."""
         try:
-            self.websocket = await websockets.connect(self.websocket_url)
-            print(f"Connected to {self.websocket_url}")
+            self.websocket = await websockets.connect(f"{self.websocket_url}?model={model}")
+            print(f"Connected to {self.websocket_url} with model: {model}")
+            self.current_model = model
             return True
         except Exception as e:
             print(f"Connection error: {e}")
@@ -57,6 +59,11 @@ class WebcamStreamClient:
                 # Кодирование и отправка кадра
                 _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 frame_data = buffer.tobytes()
+
+                message = json.dumps({
+                    "model": self.current_model,
+                    "frame": frame_data
+                })
                 
                 # Отправка кадра на сервер
                 await self.websocket.send(frame_data)

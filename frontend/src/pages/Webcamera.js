@@ -12,6 +12,7 @@ const Webcamera = () => {
   const [isStreamingActive, setIsStreamingActive] = useState(false);
   const [fps, setFps] = useState(15);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('skeleton');
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -34,10 +35,17 @@ const Webcamera = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      connectWebSocket();
+    }
+  }, [selectedModel]);
+
   const connectWebSocket = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    wsRef.current = new WebSocket(`${protocol}//${host}/ws/camera`);
+    const host = window.location.hostname + ':8000';
+    wsRef.current = new WebSocket(`${protocol}//${host}/ws/camera?model=${selectedModel}`);
 
     wsRef.current.onopen = () => {
       console.log('WebSocket connected');
@@ -116,6 +124,8 @@ const Webcamera = () => {
             canvasRef={canvasRef}
             videoRef={videoRef}
             captureCanvasRef={captureCanvasRef}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
           />
         </Container>
       </Container>
