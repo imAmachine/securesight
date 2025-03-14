@@ -1,80 +1,61 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Container, Row, Col, Card, Badge, Spinner } from 'react-bootstrap';
-import { FaVideo, FaVideoSlash, FaUser } from 'react-icons/fa';
-import '../styles/main.css';
+import { Container } from 'react-bootstrap';
 import { useStateContext } from '../contexts/ContextProvider';
-import { Footer, Sidebar } from "../components";
+import { Header, Sidebar } from "../components";
+import WebcameraComponent from '../components/WebcameraComponent';
+import '../styles/main.css';
 
 const Webcamera = () => {
-  const { currentMode } = useStateContext();
+  const { setCurrentColor, setCurrentMode, currentMode } = useStateContext();
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isStreamingActive, setIsStreamingActive] = useState(false);
+  const [fps, setFps] = useState(15);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const captureCanvasRef = useRef(null);
   const wsRef = useRef(null);
-  const clientId = useRef(`client-${Date.now()}`);
 
   useEffect(() => {
-    // Инициализация WebSocket соединения
+    const currentThemeColor = localStorage.getItem('colorMode');
+    const currentThemeMode = localStorage.getItem('themeMode');
+    if (currentThemeColor && currentThemeMode) {
+      setCurrentColor(currentThemeColor);
+      setCurrentMode(currentThemeMode);
+    }
     connectWebSocket();
-
-    // Очистка при размонтировании компонента
     return () => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close();
       }
+      stopStreamingVideo();
     };
   }, []);
 
   const connectWebSocket = () => {
-    const ws = new WebSocket(`ws://localhost:8000/ws/camera/${clientId.current}`);
-    wsRef.current = ws;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    wsRef.current = new WebSocket(`${protocol}//${host}/ws/camera`);
 
-    ws.onopen = () => {
+    wsRef.current.onopen = () => {
       console.log('WebSocket connected');
       setIsConnected(true);
       setIsLoading(false);
     };
 
-    ws.onclose = () => {
+    wsRef.current.onclose = () => {
       console.log('WebSocket disconnected');
       setIsConnected(false);
-      
-      // Попытка переподключения через 3 секунды
-      setTimeout(() => {
-        if (!isConnected) {
-          connectWebSocket();
-        }
-      }, 3000);
+      setIsStreamingActive(false);
+      setTimeout(() => connectWebSocket(), 3000);
     };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setIsLoading(false);
+    wsRef.current.onmessage = (event) => {
+      displayFrame(event.data);
+      setIsProcessing(false);
     };
-
-    ws.onmessage = (event) => {
-      handleServerMessage(event.data);
-    };
-  };
-
-  const handleServerMessage = (data) => {
-    try {
-      const message = JSON.parse(data);
-      
-      // Обработка и отображение видеокадра
-      if (message.frame) {
-        displayFrame(message.frame);
-      }
-      
-      // Обработка логов с распознанными действиями
-      if (message.log) {
-        const logData = JSON.parse(message.log);
-        setDetectedActions(logData.Actions || []);
-        setNumPeople(logData.Num_People || 0);
-      }
-    } catch (error) {
-      console.error('Error parsing server message:', error);
-    }
   };
 
   const displayFrame = (frameBase64) => {
@@ -83,58 +64,60 @@ const Webcamera = () => {
 
     const ctx = canvas.getContext('2d');
     const img = new Image();
-    
+
     img.onload = () => {
-      // Очистка холста перед отрисовкой нового кадра
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Отрисовка изображения на холсте
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     };
-    
+
     img.src = `data:image/jpeg;base64,${frameBase64}`;
   };
 
+  const startStreamingVideo = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 30 }
+        }
+      });
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+        setIsStreamingActive(true);
+      }
+    } catch (error) {
+      console.error('Error accessing webcam:', error);
+    }
+  };
+
+  const stopStreamingVideo = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+    }
+    setIsStreamingActive(false);
+  };
+
   return (
-    <Container fluid className="d-flex vh-100 p-0">
+    <Container fluid className={`d-flex vh-100 p-0 ${currentMode === 'Dark' ? 'main-dark' : ''}`}>
       <Sidebar />
-      <Container fluid className={`main-container d-flex p-0 flex-column ${currentMode === 'Dark' ? 'main-dark' : ''}`}>
+      <Container fluid className="main-container d-flex p-0 flex-column">
+        <Header />
         <Container className="main d-flex flex-column align-items-center justify-content-center">
-          <Card className={`video-stream-card ${currentMode === 'Light' ? 'video-stream-card-light' : 'video-stream-card-dark'}`}>
-            <Card.Header className={`d-flex justify-content-between align-items-center ${currentMode === 'Light' ? 'text-dark' : 'text-light'}`}>
-              <h3>Распознавание активности</h3>
-              <Badge bg={isConnected ? "success" : "danger"}>
-                {isConnected ? "Подключено" : "Отключено"}
-              </Badge>
-            </Card.Header>
-            <Card.Body>
-              <Row>
-                <Col lg={8} md={12} className="mb-3 mb-lg-0">
-                  <div className="video-container position-relative">
-                    {isLoading ? (
-                      <div className="loading-overlay d-flex justify-content-center align-items-center">
-                        <Spinner animation="border" variant="primary" />
-                      </div>
-                    ) : !isConnected ? (
-                      <div className="connection-error d-flex flex-column justify-content-center align-items-center">
-                        <FaVideoSlash size={48} className="mb-3 text-danger" />
-                        <h5>Нет соединения с сервером</h5>
-                        <p>Пытаемся восстановить подключение...</p>
-                      </div>
-                    ) : null}
-                    <canvas 
-                      ref={canvasRef} 
-                      width="640" 
-                      height="480" 
-                      className="video-canvas w-100 h-auto"
-                    />
-                  </div>
-                </Col>
-              </Row>
-            </Card.Body>
-          </Card>
+          <WebcameraComponent
+            currentMode={currentMode}
+            isConnected={isConnected}
+            isLoading={isLoading}
+            isStreamingActive={isStreamingActive}
+            startStreamingVideo={startStreamingVideo}
+            stopStreamingVideo={stopStreamingVideo}
+            canvasRef={canvasRef}
+            videoRef={videoRef}
+            captureCanvasRef={captureCanvasRef}
+          />
         </Container>
-        <Footer />
       </Container>
     </Container>
   );

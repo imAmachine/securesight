@@ -35,7 +35,7 @@ const AppRoutes = () => {
           element: <Videos />
         },
         {
-          path: '/ws/camera/',
+          path: '/ws/camera',
           element: <Webcamera />
         }
       ]

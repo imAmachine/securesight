@@ -13,7 +13,7 @@ class CameraConsumer(AsyncWebsocketConsumer):
         
         # Подключиться к FastAPI сервису
         try:
-            self.backend_url = f"ws://backend:8000/ws/camera/{self.client_id}"
+            self.backend_url = f"ws://microservice:9000/ws/camera/{self.client_id}"
             self.session = aiohttp.ClientSession()
             self.backend_ws = await self.session.ws_connect(self.backend_url)
             
@@ -41,11 +41,16 @@ class CameraConsumer(AsyncWebsocketConsumer):
             }))
             return
 
-        # Перенаправить данные на сервер обработки
-        if bytes_data:
-            await self.backend_ws.send_bytes(bytes_data)
-        elif text_data:
-            await self.backend_ws.send_str(text_data)
+        try:
+            # Перенаправить данные на сервер обработки
+            if bytes_data:
+                await self.backend_ws.send_bytes(bytes_data)
+            elif text_data:
+                await self.backend_ws.send_str(text_data)
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                "error": f"Failed to send data to processing server: {str(e)}"
+            }))
 
     async def forward_messages(self):
         try:

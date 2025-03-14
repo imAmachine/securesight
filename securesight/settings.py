@@ -42,6 +42,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost",
     "http://backend:8000",
     "http://microservice:9000",
+    "http://frontend:3000"
 ]
 
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
@@ -142,6 +143,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'securesight.wsgi.application'
 ASGI_APPLICATION = 'securesight.asgi.application'
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [('redis', 6379)],
+        },
+    },
+}
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
