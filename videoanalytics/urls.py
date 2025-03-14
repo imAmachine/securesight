@@ -10,6 +10,5 @@ urlpatterns = [
     path('ai_processed/count/', views.TotalAIProcessedVideosView.as_view(), name='total_ai_processed'),
     path('<slug:slug>/', views.VideoDetailView.as_view(), name='video_detail'),
     path('<slug:slug>/ai_process/', views.SendVideoToAIAPIView.as_view(), name='ai_process_video'),
-    path('tasks/<str:task_id>/', views.VideoTaskStatusView.as_view(), name='task_status'),
-
+    path('tasks/<str:task_id>/', views.VideoTaskStatusView.as_view(), name='task_status')
 ]

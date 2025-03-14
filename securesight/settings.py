@@ -105,7 +105,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'authapi.apps.AuthapiConfig',
-    'videoanalytics'
+    'videoanalytics',
+    'channels'
 ]
 
 MIDDLEWARE = [
@@ -140,6 +141,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'securesight.wsgi.application'
+ASGI_APPLICATION = 'securesight.asgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases

@@ -5,9 +5,8 @@ import Register from '../pages/Register';
 import Main from '../pages/Main';
 import Videos from '../pages/Videos';
 import VideoDetail from '../pages/VideoDetail'
-import Clips from '../pages/Clips'
-import Incidents from '../pages/Incidents'
 import PrivateRoute from "./PrivateRoute";
+import Webcamera from '../pages/Webcamera';
 
 
 const AppRoutes = () => {
@@ -36,12 +35,8 @@ const AppRoutes = () => {
           element: <Videos />
         },
         {
-          path: '/clips',
-          element: <Clips />
-        },
-        {
-          path: '/incidents',
-          element: <Incidents />
+          path: '/ws/camera/',
+          element: <Webcamera />
         }
       ]
     }

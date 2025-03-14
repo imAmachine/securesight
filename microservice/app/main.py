@@ -8,17 +8,6 @@ torch.cuda.empty_cache()
 
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"]
-)
-
-ctx = None
-
-
 async def startup():
     global ctx
     ctx = cuda.Context.attach()

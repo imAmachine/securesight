@@ -7,4 +7,3 @@ export {default as Dashboard} from './Dashboard';
 export {default as VideoList} from './VideoList';
 export {default as VideoUploadForm} from './VideoUploadForm';
 export {default as Log} from './Log';
-export {default as WebcamStream} from './WebcamStream';

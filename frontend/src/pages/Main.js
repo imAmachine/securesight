@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import client from '../ApiClient';
-import {Dashboard, Footer, Header, Sidebar, VideoUploadForm, WebcamStream} from "../components";
+import {Dashboard, Footer, Header, Sidebar, VideoUploadForm} from "../components";
 import {useStateContext} from '../contexts/ContextProvider';
 import {Container} from 'react-bootstrap';
 import '../styles/main.css';
@@ -37,9 +37,6 @@ const Main = () => {
                 <Header handleToggleForm={handleToggleForm} showForm={showForm}/>
                 <Container
                     className={`main d-flex flex-column align-items-center justify-content-center ${currentMode === 'Dark' ? 'main-dark' : ''}`}>
-                    <div className={`webcam-container ${showWebcam ? 'fade-in' : 'fade-out'}`}>
-                        {showWebcam && <WebcamStream />}
-                    </div>
                     <div className={`dashboard-container ${showWebcam || showForm ? 'fade-out' : 'fade-in'} ${showWebcam || showForm ? 'd-none' : ''}`}>
                         {!showForm && <Dashboard/>}
                     </div>
