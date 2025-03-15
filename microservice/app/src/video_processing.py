@@ -45,26 +45,32 @@ def initialize_progress_bar(video):
    return tqdm(total=total_frames, desc="Processing video", unit="frame", dynamic_ncols=True)
 
 def initialize_components():
-   # Load configuration
-   cfg = Config("app/src/configs/infer_trtpose_deepsort_dnn.yaml")
-   
-   # Initialize modules
-   pose_estimator = get_pose_estimator(**cfg.POSE)
-   tracker = get_tracker(**cfg.TRACKER)
-   action_classifier = get_classifier(**cfg.CLASSIFIER)
-   drawer = Drawer()
-   
-   return {
-       'pose_estimator': pose_estimator,
-       'tracker': tracker,
-       'action_classifier': action_classifier,
-       'drawer': drawer,
-       'visualization_params': {
-           'text_color': 'green',
-           'add_blank': False,
-           'Mode': 'action',
-       }
-   }
+    # Load configuration
+    cfg = Config("app/src/configs/infer_trtpose_deepsort_dnn.yaml")
+
+    # Initialize modules
+    pose_estimator = get_pose_estimator(**cfg.POSE)
+    tracker = get_tracker(**cfg.TRACKER)
+    action_classifier = get_classifier(**cfg.CLASSIFIER)
+    drawer = Drawer()
+
+    # Проверяем, что все компоненты корректно инициализированы
+    if not pose_estimator or not tracker or not action_classifier or not drawer:
+        print("Ошибка инициализации компонентов!")
+        raise ValueError("Не удалось инициализировать один или несколько компонентов")
+
+    return {
+        'pose_estimator': pose_estimator,
+        'tracker': tracker,
+        'action_classifier': action_classifier,
+        'drawer': drawer,
+        'visualization_params': {
+            'text_color': 'green',
+            'add_blank': False,
+            'Mode': 'action',
+        }
+    }
+
 
 def initialize_video_writer(video, output_path):
    output_width = int(video.width)
@@ -73,50 +79,59 @@ def initialize_video_writer(video, output_path):
    return cv2.VideoWriter(output_path, fourcc, video.fps, (output_width, output_height))
 
 def process_frames(video, components, video_writer, progress_bar):
-   pose_estimator = components['pose_estimator']
-   tracker = components['tracker']
-   action_classifier = components['action_classifier']
-   drawer = components['drawer']
-   user_text = components['visualization_params']
-   
-   log_entries = []
-   timestamp_prev = 0
-   
-   for bgr_frame, timestamp in video:
-       # Process frame
-       rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
-       predictions = process_frame(rgb_frame, pose_estimator, tracker, action_classifier)
-       
-       # Render and write the frame
-       render_image = drawer.render_frame(bgr_frame, predictions, **user_text)
-       video_writer.write(render_image)
-       
-       # Add log entry if needed
-       if timestamp - timestamp_prev >= 1:
-           log_entry = create_log_entry(predictions, timestamp, video.frame_cnt)
-           log_entries.append(log_entry)
-           timestamp_prev = timestamp
-           
-       progress_bar.update(1)
-       
-   return log_entries
+    pose_estimator = components['pose_estimator']
+    tracker = components['tracker']
+    action_classifier = components['action_classifier']
+    drawer = components['drawer']
+    user_text = components['visualization_params']
+
+    log_entries = []
+    timestamp_prev = 0
+
+    for bgr_frame, timestamp in video:
+        print(f"Обработка кадра {video.frame_cnt}, таймстамп: {timestamp}")
+
+        # Process frame
+        rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
+        predictions = process_frame(rgb_frame, pose_estimator, tracker, action_classifier)
+
+        # Render and write the frame
+        render_image = drawer.render_frame(bgr_frame, predictions, **user_text)
+        if render_image is None:
+            print("Ошибка рендера кадра!")
+            continue
+        video_writer.write(render_image)
+
+        # Add log entry if needed
+        if timestamp - timestamp_prev >= 1:
+            log_entry = create_log_entry(predictions, timestamp, video.frame_cnt)
+            log_entries.append(log_entry)
+            timestamp_prev = timestamp
+
+        progress_bar.update(1)
+
+    return log_entries
+
 
 def process_frame(rgb_frame, pose_estimator, tracker, action_classifier):
-   # Get pose predictions
-   predictions = pose_estimator.predict(rgb_frame, get_bbox=True)
-   
-   if len(predictions) == 0:
-       tracker.increment_ages()
-       return []
-   
-   # Track and classify
-   predictions = convert_to_openpose_skeletons(predictions)
-   predictions, _ = tracker.predict(rgb_frame, predictions)
-   
-   if len(predictions) > 0:
-       predictions = action_classifier.classify(predictions)
-       
-   return predictions
+    # Get pose predictions
+    predictions = pose_estimator.predict(rgb_frame, get_bbox=True)
+    print(f"Количество предсказаний поз: {len(predictions)}")
+
+    if len(predictions) == 0:
+        tracker.increment_ages()
+        return []
+
+    # Track and classify
+    predictions = convert_to_openpose_skeletons(predictions)
+    predictions, _ = tracker.predict(rgb_frame, predictions)
+
+    if len(predictions) > 0:
+        predictions = action_classifier.classify(predictions)
+    
+    print(f"Количество классифицированных объектов: {len(predictions)}")
+    return predictions
+
 
 def create_log_entry(predictions, timestamp, frame_cnt):
    num_people = len(predictions)

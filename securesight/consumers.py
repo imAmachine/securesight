@@ -6,14 +6,14 @@ import base64
 
 class CameraConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.client_id = self.scope['url_route']['kwargs']['client_id']
+        self.model_name = self.scope['url_route']['kwargs']['model_name']
         
         # Принять соединение от веб-клиента
         await self.accept()
         
         # Подключиться к FastAPI сервису
         try:
-            self.backend_url = f"ws://microservice:9000/ws/camera/{self.client_id}"
+            self.backend_url = f"ws://microservice:9000/ws/camera/{self.model_name}"
             self.session = aiohttp.ClientSession()
             self.backend_ws = await self.session.ws_connect(self.backend_url)
             

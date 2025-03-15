@@ -141,8 +141,9 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'securesight.wsgi.application'
+#WSGI_APPLICATION = 'securesight.wsgi.application'
 ASGI_APPLICATION = 'securesight.asgi.application'
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',

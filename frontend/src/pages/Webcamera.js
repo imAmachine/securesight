@@ -26,7 +26,9 @@ const Webcamera = () => {
       setCurrentColor(currentThemeColor);
       setCurrentMode(currentThemeMode);
     }
+
     connectWebSocket();
+
     return () => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close();
@@ -44,11 +46,11 @@ const Webcamera = () => {
 
   const connectWebSocket = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname + ':8000';
-    wsRef.current = new WebSocket(`${protocol}//${host}/ws/camera?model=${selectedModel}`);
+    const host = window.location.hostname + ':9000';
+    wsRef.current = new WebSocket(`${protocol}//${host}/ws/camera/${selectedModel}`);
 
     wsRef.current.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('WebSocket connected directly to FastAPI');
       setIsConnected(true);
       setIsLoading(false);
     };
@@ -61,8 +63,23 @@ const Webcamera = () => {
     };
 
     wsRef.current.onmessage = (event) => {
-      displayFrame(event.data);
-      setIsProcessing(false);
+      try {
+        const data = JSON.parse(event.data);
+        if (data.frame) {
+          console.log("Получен кадр base64 для отрисовки:", data.frame.slice(0, 50)); // Проверка данных
+          displayFrame(data.frame);
+        } else if (data.error) {
+          console.error('Ошибка сервера:', data.error);
+        }
+        setIsProcessing(false);
+      } catch (e) {
+        console.error('Ошибка обработки сообщения WebSocket:', e);
+      }
+    };
+
+    wsRef.current.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setIsConnected(false);
     };
   };
 
@@ -74,8 +91,15 @@ const Webcamera = () => {
     const img = new Image();
 
     img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      console.log("Кадр успешно отрисован.");
+    };
+
+    img.onerror = () => {
+      console.error("Ошибка загрузки изображения для отрисовки.");
     };
 
     img.src = `data:image/jpeg;base64,${frameBase64}`;
@@ -95,9 +119,52 @@ const Webcamera = () => {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
         setIsStreamingActive(true);
+
+        const captureCanvas = captureCanvasRef.current;
+        const captureCtx = captureCanvas.getContext('2d');
+        const video = videoRef.current;
+
+        video.addEventListener('loadedmetadata', () => {
+          captureCanvas.width = video.videoWidth;
+          captureCanvas.height = video.videoHeight;
+        });
+
+        const sendFrame = () => {
+          if (
+            isStreamingActive &&
+            wsRef.current &&
+            wsRef.current.readyState === WebSocket.OPEN &&
+            !isProcessing
+          ) {
+            captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+            captureCanvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  wsRef.current.send(blob);
+                  console.log("Кадр отправлен на сервер.");
+                  setIsProcessing(true);
+                } else {
+                  console.error('Не удалось создать blob для отправки.');
+                }
+              },
+              'image/jpeg',
+              0.8
+            );
+          }
+        };
+
+        const frameInterval = setInterval(() => {
+          if (isStreamingActive) {
+            sendFrame();
+          } else {
+            clearInterval(frameInterval);
+          }
+        }, 1000 / fps);
+
+        return () => clearInterval(frameInterval);
       }
     } catch (error) {
-      console.error('Error accessing webcam:', error);
+      console.error('Ошибка доступа к веб-камере:', error);
     }
   };
 

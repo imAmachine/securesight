@@ -47,4 +47,4 @@ RUN python manage.py collectstatic --no-input
 
 EXPOSE 8000
 
-CMD ["gunicorn", "securesight.wsgi", "--bind=0.0.0.0:8000"]
+CMD ["uvicorn", "securesight.asgi:application", "--host", "0.0.0.0", "--port", "8000"]

@@ -15,19 +15,16 @@ router = APIRouter()
 
 active_connections = {}
 
-@router.websocket("/ws/camera/{client_id}")
-async def camera_websocket_endpoint(websocket: WebSocket, client_id: str):
-    """WebSocket маршрут для обработки видеопотока с камеры."""
+@router.websocket("/ws/camera/{model_name}")
+async def camera_websocket_endpoint(websocket: WebSocket, model_name: str):
+    """WebSocket маршрут для обработки видеопотока с фронтенда."""
     await websocket.accept()
-    active_connections[client_id] = websocket
-    print(f"Client {client_id} connected")
+    active_connections[model_name] = websocket
+    print(f"Client connected with model: {model_name}")
 
+    # Инициализируем ресурсы для обработки
     components = initialize_components()
-    cap = cv2.VideoCapture(0)
-
-    if not cap.isOpened():
-        await websocket.send_text(json.dumps({"error": "Failed to open camera"}))
-        return
+    components["model_name"] = model_name
 
     frame_count = 0
     start_time = time.time()
@@ -35,27 +32,56 @@ async def camera_websocket_endpoint(websocket: WebSocket, client_id: str):
 
     try:
         while True:
-            ret, bgr_frame = cap.read()
-            if not ret:
-                break
+            # 1. Принимаем кадр от клиента
+            try:
+                frame_data = await websocket.receive_text()
+                print(f"Получено сообщение (первые 50 символов): {frame_data[:50]}...")
+                
+                # Декодирование base64 данных
+                frame_bytes = base64.b64decode(frame_data)
+                np_arr = np.frombuffer(frame_bytes, np.uint8)
+                bgr_frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
+                if bgr_frame is None:
+                    print("Ошибка: получен некорректный кадр.")
+                    continue
+                print("Кадр успешно декодирован.")
+            except Exception as e:
+                print(f"Ошибка при декодировании данных кадра: {e}")
+                await websocket.send_text(json.dumps({"error": "Invalid frame data"}))
+                continue
+
+            # 2. Обработка кадра
+            try:
+                predictions, render_image = process_frame_and_render(bgr_frame, components)
+                print("Кадр успешно обработан.")
+            except Exception as e:
+                print(f"Ошибка обработки кадра: {e}")
+                await websocket.send_text(json.dumps({"error": "Error processing frame"}))
+                continue
+
+            # 3. Отправляем обработанные данные клиенту каждую секунду
             timestamp = time.time() - start_time
             frame_count += 1
 
-            predictions, render_image = process_frame_and_render(bgr_frame, components)
-
             if timestamp - timestamp_prev >= 1:
-                await send_websocket_data(websocket, render_image, predictions, timestamp, frame_count)
-                timestamp_prev = timestamp
+                try:
+                    print(f"Отправка обработанных данных клиенту. Всего кадров: {frame_count}")
+                    await send_websocket_data(websocket, render_image, predictions, timestamp, frame_count)
+                    timestamp_prev = timestamp
+                except Exception as e:
+                    print(f"Ошибка отправки данных клиенту: {e}")
+                    break
 
     except WebSocketDisconnect:
-        print(f"Client {client_id} disconnected")
+        print(f"Клиент с моделью {model_name} отключился.")
     except Exception as e:
-        print(f"Error in WebSocket processing: {e}")
+        print(f"Общая ошибка в обработке WebSocket: {e}")
         await websocket.send_text(json.dumps({"error": str(e)}))
     finally:
-        cap.release()
-        active_connections.pop(client_id, None)
+        # Убираем соединение из активных
+        active_connections.pop(model_name, None)
+        print(f"Соединение для модели {model_name} закрыто.")
 
 @router.get("/api/status")
 async def get_status():

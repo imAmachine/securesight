@@ -8,6 +8,14 @@ torch.cuda.empty_cache()
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 async def startup():
     global ctx
     ctx = cuda.Context.attach()
@@ -26,4 +34,4 @@ async def root():
 # Добавляем контекст жизненного цикла к приложению
 app.add_event_handler("startup", startup)
 app.add_event_handler("shutdown", shutdown)
-app.include_router(router)
+app.include_router(router, prefix="")
