@@ -44,22 +44,43 @@ const Webcamera = () => {
     }
   }, [selectedModel]);
 
+  useEffect(() => {
+    if (isStreamingActive) {
+      console.log('Streaming ACTIVE, WS state:', wsRef.current?.readyState);
+    } else {
+      console.log('Streaming INACTIVE');
+    }
+  }, [isStreamingActive]);
+
+  const streamingActiveRef = useRef(false);
+
+  useEffect(() => {
+    streamingActiveRef.current = isStreamingActive;
+  }, [isStreamingActive]);
+
   const connectWebSocket = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname + ':9000';
-    wsRef.current = new WebSocket(`${protocol}//${host}/ws/camera/${selectedModel}`);
-
+    const host = window.location.hostname + ':9000'; // Используем текущий хост
+    const wsUrl = `${protocol}//${host}/ws/camera/${selectedModel}`;
+    
+    console.log(`Подключение к WebSocket: ${wsUrl}`);
+    
+    wsRef.current = new WebSocket(wsUrl);
+  
     wsRef.current.onopen = () => {
-      console.log('WebSocket connected directly to FastAPI');
+      console.log('WebSocket подключен');
       setIsConnected(true);
       setIsLoading(false);
+      if (isStreamingActive) {
+        console.log('Перезапуск отправки кадров после переподключения');
+      }
     };
 
-    wsRef.current.onclose = () => {
-      console.log('WebSocket disconnected');
-      setIsConnected(false);
-      setIsStreamingActive(false);
-      setTimeout(() => connectWebSocket(), 3000);
+    wsRef.current.onclose = (event) => {
+        console.warn('WebSocket disconnected, причина:', event.reason);
+        setIsConnected(false);
+        setIsStreamingActive(false);
+        setTimeout(() => connectWebSocket(), 3000);  // Переподключение через 3 сек
     };
 
     wsRef.current.onmessage = (event) => {
@@ -114,65 +135,68 @@ const Webcamera = () => {
           frameRate: { ideal: 30 }
         }
       });
-
+  
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        setIsStreamingActive(true);
-
-        const captureCanvas = captureCanvasRef.current;
-        const captureCtx = captureCanvas.getContext('2d');
-        const video = videoRef.current;
-
-        video.addEventListener('loadedmetadata', () => {
-          captureCanvas.width = video.videoWidth;
-          captureCanvas.height = video.videoHeight;
+        
+        await new Promise((resolve) => {
+          videoRef.current.onloadedmetadata = () => {
+            const captureCanvas = captureCanvasRef.current;
+            captureCanvas.width = videoRef.current.videoWidth;
+            captureCanvas.height = videoRef.current.videoHeight;
+            console.log(`Размеры видео: ${captureCanvas.width}x${captureCanvas.height}`);
+            resolve();
+          };
         });
-
+  
+        await videoRef.current.play();
+        
+        setIsStreamingActive(true);
+        streamingActiveRef.current = true; // Используем внешний ref
+  
+        const captureCtx = captureCanvasRef.current.getContext('2d');
+        const video = videoRef.current;
+  
         const sendFrame = () => {
           if (
-            isStreamingActive &&
-            wsRef.current &&
-            wsRef.current.readyState === WebSocket.OPEN &&
-            !isProcessing
+            streamingActiveRef.current && 
+            wsRef.current?.readyState === WebSocket.OPEN
           ) {
-            captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-            captureCanvas.toBlob(
-              (blob) => {
-                if (blob) {
-                  wsRef.current.send(blob);
-                  console.log("Кадр отправлен на сервер.");
-                  setIsProcessing(true);
-                } else {
-                  console.error('Не удалось создать blob для отправки.');
-                }
-              },
-              'image/jpeg',
-              0.8
-            );
+            try {
+              captureCtx.drawImage(video, 0, 0);
+              const frameBase64 = captureCanvasRef.current
+                .toDataURL("image/jpeg", 0.8)
+                .split(",")[1];
+              
+              console.log("Отправка кадра:", frameBase64.slice(0, 20) + "...");
+              wsRef.current.send(frameBase64);
+            } catch (e) {
+              console.error('Ошибка отправки:', e);
+            }
+            requestAnimationFrame(sendFrame);
           }
         };
-
-        const frameInterval = setInterval(() => {
-          if (isStreamingActive) {
-            sendFrame();
-          } else {
-            clearInterval(frameInterval);
-          }
-        }, 1000 / fps);
-
-        return () => clearInterval(frameInterval);
+  
+        requestAnimationFrame(sendFrame);
+  
+        return () => {
+          streamingActiveRef.current = false;
+        };
       }
     } catch (error) {
-      console.error('Ошибка доступа к веб-камере:', error);
+      console.error('Ошибка доступа к камере:', error);
+      setIsStreamingActive(false);
     }
   };
 
   const stopStreamingVideo = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
     }
+    streamingActiveRef.current = false;
     setIsStreamingActive(false);
+    console.log('Поток остановлен');
   };
 
   return (

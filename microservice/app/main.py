@@ -31,6 +31,10 @@ async def shutdown():
 async def root():
     return {"message": "Welcome to SecureSight Assistant API"}
 
+@app.get("/ws/test")
+async def websocket_test():
+    return {"message": "WebSocket is available"}
+
 # Добавляем контекст жизненного цикла к приложению
 app.add_event_handler("startup", startup)
 app.add_event_handler("shutdown", shutdown)

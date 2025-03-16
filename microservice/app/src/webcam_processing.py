@@ -2,6 +2,7 @@ import base64
 import json
 import cv2
 from app.src.video_processing import create_log_entry, process_frame
+import numpy as np
 
 
 def process_frame_and_render(bgr_frame, components):

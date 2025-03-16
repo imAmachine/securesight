@@ -20,9 +20,8 @@ async def camera_websocket_endpoint(websocket: WebSocket, model_name: str):
     """WebSocket маршрут для обработки видеопотока с фронтенда."""
     await websocket.accept()
     active_connections[model_name] = websocket
-    print(f"Client connected with model: {model_name}")
+    print(f"Клиент подключился к модели: {model_name}")
 
-    # Инициализируем ресурсы для обработки
     components = initialize_components()
     components["model_name"] = model_name
 
@@ -35,16 +34,16 @@ async def camera_websocket_endpoint(websocket: WebSocket, model_name: str):
             # 1. Принимаем кадр от клиента
             try:
                 frame_data = await websocket.receive_text()
-                print(f"Получено сообщение (первые 50 символов): {frame_data[:50]}...")
-                
-                # Декодирование base64 данных
+                print(f"Получен кадр (первые 50 символов): {frame_data[:50]}...")
+
                 frame_bytes = base64.b64decode(frame_data)
                 np_arr = np.frombuffer(frame_bytes, np.uint8)
                 bgr_frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
                 if bgr_frame is None:
-                    print("Ошибка: получен некорректный кадр.")
+                    print("Ошибка: некорректный кадр!")
                     continue
+
                 print("Кадр успешно декодирован.")
             except Exception as e:
                 print(f"Ошибка при декодировании данных кадра: {e}")
@@ -54,7 +53,7 @@ async def camera_websocket_endpoint(websocket: WebSocket, model_name: str):
             # 2. Обработка кадра
             try:
                 predictions, render_image = process_frame_and_render(bgr_frame, components)
-                print("Кадр успешно обработан.")
+                print("Кадр обработан.")
             except Exception as e:
                 print(f"Ошибка обработки кадра: {e}")
                 await websocket.send_text(json.dumps({"error": "Error processing frame"}))
@@ -68,6 +67,7 @@ async def camera_websocket_endpoint(websocket: WebSocket, model_name: str):
                 try:
                     print(f"Отправка обработанных данных клиенту. Всего кадров: {frame_count}")
                     await send_websocket_data(websocket, render_image, predictions, timestamp, frame_count)
+                    print("Данные отправлены клиенту.")
                     timestamp_prev = timestamp
                 except Exception as e:
                     print(f"Ошибка отправки данных клиенту: {e}")
@@ -82,6 +82,11 @@ async def camera_websocket_endpoint(websocket: WebSocket, model_name: str):
         # Убираем соединение из активных
         active_connections.pop(model_name, None)
         print(f"Соединение для модели {model_name} закрыто.")
+
+
+@router.get("/ping")
+async def health_check():
+    return {"status": "alive"}
 
 @router.get("/api/status")
 async def get_status():
